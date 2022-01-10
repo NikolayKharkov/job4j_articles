@@ -7,8 +7,9 @@ import ru.job4j.articles.model.Word;
 import ru.job4j.articles.service.generator.ArticleGenerator;
 import ru.job4j.articles.store.Store;
 
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.lang.ref.SoftReference;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SimpleArticleService implements ArticleService {
 
@@ -24,10 +25,18 @@ public class SimpleArticleService implements ArticleService {
     public void generate(Store<Word> wordStore, int count, Store<Article> articleStore) {
         LOGGER.info("Геренация статей в количестве {}", count);
         var words = wordStore.findAll();
-        var articles = IntStream.iterate(0, i -> i < count, i -> i + 1)
-                .peek(i -> LOGGER.info("Сгенерирована статья № {}", i))
-                .mapToObj((x) -> articleGenerator.generate(words))
-                .collect(Collectors.toList());
-        articles.forEach(articleStore::save);
+        List<SoftReference<Article>> articles = new ArrayList<>();
+        for (int i = 0; i != count; i++) {
+            articles.add(new SoftReference<>(articleGenerator.generate(words)));
+            LOGGER.info("Сгенерирована статья № {}", i);
+        }
+        for (SoftReference<Article> ref : articles) {
+            Article article = ref.get();
+            if (article != null) {
+                articleStore.save(article);
+            } else {
+                articleStore.save(articleGenerator.generate(words));
+            }
+        }
     }
 }
